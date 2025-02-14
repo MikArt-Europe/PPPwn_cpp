@@ -2,18 +2,18 @@
 #include <iostream>
 #include <sstream>
 #include <functional>
-
+#include <mutex>
+#include <unordered_set>
+#include <thread>
 #include "web.h"
 
-static const char *s_json_header =
-        "Content-Type: application/json\r\n"
-        "Cache-Control: no-cache\r\n";
+static const char *s_json_header = "Content-Type: application/json\r\nCache-Control: no-cache\r\n";
 
 static void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
-    auto *self = (WebPage *) c->fn_data;
+    auto *self = static_cast<WebPage *>(c->fn_data);
 
     if (ev == MG_EV_HTTP_MSG) {
-        auto *hm = (struct mg_http_message *) ev_data;
+        auto *hm = static_cast<struct mg_http_message *>(ev_data);
         if (mg_match(hm->uri, mg_str("/pppwn.log"), nullptr)) {
             mg_printf(c, "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n");
             self->addClient(c);
@@ -28,7 +28,7 @@ static void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
             self->stopExploit();
             mg_http_reply(c, 200, s_json_header, "{\"code\": 200}");
         } else {
-            struct mg_http_serve_opts opts = {.root_dir= "/web", .fs = &mg_fs_packed};
+            struct mg_http_serve_opts opts = {.root_dir = "/web", .fs = &mg_fs_packed};
             mg_http_serve_dir(c, hm, &opts);
         }
     } else if (ev == MG_EV_CLOSE) {
@@ -37,9 +37,7 @@ static void ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 WebPage::WebPage(std::shared_ptr<Exploit> exploit) : exploit(std::move(exploit)) {
-    buf.setCallback([this](const std::string &str) {
-        this->broadcast(str);
-    });
+    buf.setCallback([this](const std::string &str) { this->broadcast(str); });
     stdbuf = std::cout.rdbuf(&buf);
 }
 
@@ -81,17 +79,15 @@ void WebPage::addClient(struct mg_connection *c) {
 
 void WebPage::removeClient(struct mg_connection *c) {
     std::lock_guard<std::mutex> lock(mutex);
-    if (clients.find(c) != clients.end()) {
-        clients.erase(c);
-    }
+    clients.erase(c);
 }
 
 void WebPage::broadcast(const std::string &msg) {
     if (msg.empty()) return;
     historyLog += "data: " + msg + "\n";
-    if (msg[msg.length() - 1] != '\n') historyLog += "\n";
+    if (msg.back() != '\n') historyLog += "\n";
     std::lock_guard<std::mutex> lock(mutex);
-    for (auto &client: clients) {
+    for (auto &client : clients) {
         mg_printf(client, "data: %s\n\n", msg.c_str());
     }
 }
@@ -102,21 +98,15 @@ std::string &WebPage::getLog() {
 
 void WebPage::startExploit() {
     exploit->stop();
-    if (exploitThread.joinable())
-        exploitThread.join();
+    if (exploitThread.joinable()) exploitThread.join();
     exploit->setWaitAfterPin(1);
-    exploitThread = std::thread([this]() {
-        return exploit->run();
-    });
+    exploitThread = std::thread([this]() { return exploit->run(); });
 }
 
 void WebPage::stopExploit() {
     exploit->stop();
-
-    if (exploitThread.joinable())
-        exploitThread.join();
-    else
-        std::cout << "[+] Already stopped" << std::endl;
+    if (exploitThread.joinable()) exploitThread.join();
+    else std::cout << "[+] Already stopped" << std::endl;
 }
 
 void CustomBuf::setCallback(std::function<void(const std::string &)> cb) {
@@ -132,9 +122,8 @@ int CustomBuf::sync() {
 }
 
 std::streambuf::int_type CustomBuf::overflow(int_type ch) {
-    if (ch != traits_type::eof()) {
-        if (ch != '\r')
-            oss.put(ch);
+    if (ch != traits_type::eof() && ch != '\r') {
+        oss.put(ch);
     }
     return ch;
 }
