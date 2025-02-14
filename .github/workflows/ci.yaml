@@ -9,7 +9,7 @@ jobs:
     name: Info
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
       - id: info
         run: |
           echo "Git commit: $(git rev-parse HEAD)" > build_info.txt
@@ -51,11 +51,11 @@ jobs:
           - { target: mips-linux-musl,  os: ubuntu-latest, strip: "llvm-strip", upx: "upx --lzma",
               cmake: "-DUSE_SYSTEM_PCAP=OFF -DZIG_COMPILE_OPTION='-msoft-float;-ffunction-sections'" }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.2.2
 
       - name: Install UPX
         if: matrix.os == 'ubuntu-latest'
-        uses: crazy-max/ghaction-upx@v3
+        uses: crazy-max/ghaction-upx@v3.1.0
         with:
           install-only: true
 
